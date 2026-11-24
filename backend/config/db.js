@@ -8,6 +8,7 @@ const dbConfig = {
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'gradpath_db',
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -17,18 +18,24 @@ let pool = null;
 
 async function initDB() {
   try {
-    // 1. Connect without database to ensure database exists
-    const rootConnection = await mysql.createConnection({
-      host: dbConfig.host,
-      port: dbConfig.port,
-      user: dbConfig.user,
-      password: dbConfig.password,
-    });
+    // 1. Try to ensure database exists (for local or root access)
+    try {
+      const rootConnection = await mysql.createConnection({
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        ssl: dbConfig.ssl,
+      });
 
-    await rootConnection.query(
-      `CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
-    );
-    await rootConnection.end();
+      await rootConnection.query(
+        `CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+      );
+      await rootConnection.end();
+    } catch (rootErr) {
+      // In managed cloud databases, database is pre-created and user might not have global create database privs
+      console.log('[DB] Cloud/Managed database mode:', rootErr.message);
+    }
 
     // 2. Create connection pool to the database
     pool = mysql.createPool(dbConfig);
