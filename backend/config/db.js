@@ -18,7 +18,6 @@ let pool = null;
 
 async function initDB() {
   try {
-    // 1. Try to ensure database exists (for local or root access)
     try {
       const rootConnection = await mysql.createConnection({
         host: dbConfig.host,
@@ -33,18 +32,14 @@ async function initDB() {
       );
       await rootConnection.end();
     } catch (rootErr) {
-      // In managed cloud databases, database is pre-created and user might not have global create database privs
       console.log('[DB] Cloud/Managed database mode:', rootErr.message);
     }
 
-    // 2. Create connection pool to the database
     pool = mysql.createPool(dbConfig);
     console.log(`[DB] Connected to MySQL database "${dbConfig.database}" at ${dbConfig.host}:${dbConfig.port}`);
 
-    // 3. Create Tables
     await createTables();
 
-    // 4. Seed initial data if empty
     await seedInitialData();
 
     return pool;
@@ -57,7 +52,6 @@ async function initDB() {
 async function createTables() {
   const connection = await pool.getConnection();
   try {
-    // Users table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -76,19 +70,15 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Ensure student_id is unique in existing tables
     try {
       await connection.query('ALTER TABLE users ADD UNIQUE KEY unique_student_id (student_id)');
     } catch (e) {
-      // Index already exists
     }
 
-    // Ensure current_cgpa column in existing users table
     try {
       await connection.query('ALTER TABLE users ADD COLUMN current_cgpa DECIMAL(3,2) DEFAULT 0.00');
     } catch (e) {}
 
-    // Semesters table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS semesters (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -102,7 +92,6 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Courses table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS courses (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -125,7 +114,6 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Study plans table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS study_plans (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -144,7 +132,6 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Pomodoro Logs table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS pomodoro_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -159,7 +146,6 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // OTP Codes table for verified password reset with attempts & usage tracking
     await connection.query(`
       CREATE TABLE IF NOT EXISTS otp_codes (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -173,7 +159,6 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Ensure columns in existing otp_codes table
     try {
       await connection.query('ALTER TABLE otp_codes ADD COLUMN attempts INT DEFAULT 0');
     } catch (e) {}
@@ -187,7 +172,6 @@ async function createTables() {
   }
 }
 
-// Bangladeshi 4.00 Grade Table
 function calculateGrade(marks) {
   if (marks === null || marks === undefined) return { grade: null, grade_point: null };
   const m = parseFloat(marks);
@@ -214,7 +198,6 @@ async function seedInitialData() {
   const adminPassword = await bcrypt.hash('Admin@12345', salt);
   const studentPassword = await bcrypt.hash('Student@12345', salt);
 
-  // 1. Admin
   await pool.query(`
     INSERT INTO users (name, email, password, student_id, role, department, level_term)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -228,7 +211,6 @@ async function seedInitialData() {
     'Faculty'
   ]);
 
-  // 2. Student 1: Md. Mobinur Mustofa Kawsar
   const [student1Res] = await pool.query(`
     INSERT INTO users (name, email, password, student_id, role, department, level_term, target_cgpa, completed_credits)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -245,7 +227,6 @@ async function seedInitialData() {
   ]);
   const student1Id = student1Res.insertId;
 
-  // 3. Student 2: Md. Manjarul Islam Tamim
   const [student2Res] = await pool.query(`
     INSERT INTO users (name, email, password, student_id, role, department, level_term, target_cgpa, completed_credits)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -262,8 +243,6 @@ async function seedInitialData() {
   ]);
   const student2Id = student2Res.insertId;
 
-  // Populate Student 1 Semesters & Courses
-  // Semester 1: Level 1 Term 1
   const [sem1] = await pool.query(`
     INSERT INTO semesters (user_id, name, term_order, is_completed)
     VALUES (?, ?, 1, 1)
@@ -309,7 +288,6 @@ async function seedInitialData() {
     `, [s2Id, student1Id, c.code, c.title, c.credits, c.marks, grade, grade_point, c.held, c.attended, c.diff]);
   }
 
-  // Semester 3: Level 2 Term 1 (Current Active Semester)
   const [sem3] = await pool.query(`
     INSERT INTO semesters (user_id, name, term_order, is_completed)
     VALUES (?, ?, 3, 0)
@@ -326,7 +304,6 @@ async function seedInitialData() {
 
   const insertedCourses = [];
   for (const c of s3Courses) {
-    // Current semester marks are continuous assessment out of 40 for now
     const [cRes] = await pool.query(`
       INSERT INTO courses (semester_id, user_id, code, title, credits, marks, grade, grade_point, attendance_held, attendance_attended, difficulty)
       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
@@ -334,7 +311,6 @@ async function seedInitialData() {
     insertedCourses.push({ id: cRes.insertId, ...c });
   }
 
-  // Study Plans for Student 1
   await pool.query(`
     INSERT INTO study_plans (user_id, course_id, title, allocated_hours, days_left, priority_score, status, exam_date, notes)
     VALUES 
@@ -347,7 +323,6 @@ async function seedInitialData() {
     student1Id, insertedCourses[2].id
   ]);
 
-  // Pomodoro Logs for Student 1
   await pool.query(`
     INSERT INTO pomodoro_logs (user_id, course_id, session_type, duration_minutes, topic)
     VALUES 
@@ -364,7 +339,6 @@ async function seedInitialData() {
     student1Id, insertedCourses[1].id
   ]);
 
-  // Populate Student 2 (Md. Manjarul Islam Tamim)
   const [s2Sem1] = await pool.query(`
     INSERT INTO semesters (user_id, name, term_order, is_completed)
     VALUES (?, 'Level 1, Term 1', 1, 1)

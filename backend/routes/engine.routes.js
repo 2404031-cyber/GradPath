@@ -3,25 +3,21 @@ const router = express.Router();
 const { getPool, calculateGrade } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
-// 1. GET /api/engine/cgpa - Current official CGPA & academic standing
 router.get('/cgpa', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
     const userId = req.user.id;
 
-    // Fetch user profile
     const [userRows] = await pool.query('SELECT target_cgpa, current_cgpa, completed_credits FROM users WHERE id = ?', [userId]);
     const targetCgpa = userRows.length > 0 && userRows[0].target_cgpa ? parseFloat(userRows[0].target_cgpa) : 3.80;
     const manualCgpa = userRows.length > 0 && userRows[0].current_cgpa ? parseFloat(userRows[0].current_cgpa) : 0.00;
     const manualCredits = userRows.length > 0 && userRows[0].completed_credits ? parseFloat(userRows[0].completed_credits) : 0.00;
 
-    // Fetch all semesters
     const [semesters] = await pool.query(
       'SELECT * FROM semesters WHERE user_id = ? ORDER BY term_order ASC',
       [userId]
     );
 
-    // Fetch all completed courses
     const [courses] = await pool.query(
       'SELECT * FROM courses WHERE user_id = ? ORDER BY id ASC',
       [userId]
@@ -65,21 +61,17 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
     let finalCompletedCredits = 0.00;
 
     if (completedCredits > 0 && manualCredits > 0 && manualCgpa > 0) {
-      // Both exist: combine baseline credits/CGPA + recorded semester courses
       const combinedPoints = (manualCgpa * manualCredits) + totalPoints;
       finalCompletedCredits = manualCredits + completedCredits;
       cgpa = parseFloat((combinedPoints / finalCompletedCredits).toFixed(2));
     } else if (completedCredits > 0) {
-      // Calculated purely from recorded courses
       cgpa = parseFloat((totalPoints / completedCredits).toFixed(2));
       finalCompletedCredits = completedCredits;
     } else if (manualCgpa > 0) {
-      // Baseline / manually uploaded CGPA & credits
       cgpa = manualCgpa;
       finalCompletedCredits = manualCredits;
     }
 
-    // Academic Standing classification
     let standing = 'Good Standing';
     let standingColor = 'emerald';
     if (cgpa >= 3.75) {
@@ -96,7 +88,6 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
       standingColor = 'rose';
     }
 
-    // Update completed_credits on user record if courses were computed
     if (completedCredits > 0) {
       await pool.query('UPDATE users SET current_cgpa = ?, completed_credits = ? WHERE id = ?', [cgpa, finalCompletedCredits, userId]);
     }
@@ -119,7 +110,6 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
   }
 });
 
-// 2. POST /api/engine/target-predict - CGPA Target Predictor Formula
 // Formula: Required GPA = [ Target * (Cd + Cn) - (Current_CGPA * Cd) ] / Cn
 router.post('/target-predict', authenticateToken, async (req, res) => {
   try {
@@ -137,7 +127,6 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
         : 36.0;
       totalPoints = currentCGPA * completedCredits;
     } else {
-      // Get current CGPA and completed credits from DB
       const [courses] = await pool.query(
         'SELECT credits, grade_point FROM courses WHERE user_id = ? AND grade_point IS NOT NULL',
         [req.user.id]
@@ -183,7 +172,6 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
       message = `You need an average GPA of only ${requiredGPA.toFixed(2)} to reach your goal.`;
     }
 
-    // Recommended plan per remaining semester
     const creditsPerSem = (remCredits / Math.max(semsLeft, 1)).toFixed(1);
     const semesterPlan = [];
     for (let i = 1; i <= semsLeft; i++) {
@@ -213,7 +201,6 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
   }
 });
 
-// 3. POST /api/engine/whatif - What-If Simulator
 router.post('/whatif', authenticateToken, async (req, res) => {
   try {
     const { simulated_courses } = req.body;
@@ -272,8 +259,6 @@ router.post('/whatif', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. GET /api/engine/retake-planner - Retake Impact & Ranking
-// Impact formula: credit * (new_gp - old_gp) / total_credits
 router.get('/retake-planner', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
@@ -296,19 +281,16 @@ router.get('/retake-planner', authenticateToken, async (req, res) => {
 
     const currentCGPA = totalCredits > 0 ? totalPoints / totalCredits : 0;
 
-    // Filter courses eligible for retake (grade < A or grade_point <= 3.25)
     const retakeCandidates = courses
       .filter(c => parseFloat(c.grade_point) <= 3.25)
       .map(c => {
         const cr = parseFloat(c.credits);
         const oldGp = parseFloat(c.grade_point);
 
-        // Calculate potential gain if retaken to A+ (4.00)
         const maxNewGp = 4.00;
         const potentialBoost = totalCredits > 0 ? (cr * (maxNewGp - oldGp)) / totalCredits : 0;
         const newProjectedCGPA = currentCGPA + potentialBoost;
 
-        // Calculate potential gain if retaken to A (3.75)
         const aBoost = totalCredits > 0 ? (cr * (3.75 - oldGp)) / totalCredits : 0;
 
         return {
@@ -398,9 +380,6 @@ router.post('/final-marks', (req, res) => {
   }
 });
 
-// 6. GET /api/engine/attendance - Safe-Bunk Calculator
-// Formula: Safe skips = floor(Attended / Min_ratio - Held)
-// If debarred: Needed consecutive classes = ceil( (Min_ratio * Held - Attended) / (1 - Min_ratio) )
 router.get('/attendance', authenticateToken, async (req, res) => {
   try {
     const minRatio = parseFloat(req.query.min_ratio) || 0.75; // default 75%

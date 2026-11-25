@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { getPool } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
-// POST /api/auth/register
+
 router.post('/register', async (req, res) => {
   const pool = getPool();
   const connection = await pool.getConnection();
@@ -41,7 +41,6 @@ router.post('/register', async (req, res) => {
     const term = level_term ? level_term.trim() : 'Level 1, Term 1';
     const target = target_cgpa ? parseFloat(target_cgpa) : 3.80;
 
-    // Admin Role Protection: Only users with verified Admin Secret Key can register as ADMIN
     const requestedRole = (role || 'STUDENT').toUpperCase();
     let userRole = 'STUDENT';
     if (requestedRole === 'ADMIN') {
@@ -54,17 +53,14 @@ router.post('/register', async (req, res) => {
       userRole = 'ADMIN';
     }
 
-    // Begin Database Transaction for Atomic Registration
     await connection.beginTransaction();
 
-    // 1. Check if email already exists
     const [existingEmail] = await connection.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
     if (existingEmail.length > 0) {
       await connection.rollback();
       return res.status(400).json({ error: 'An account with this email address already exists.' });
     }
 
-    // 2. Check if student_id already exists (Unique Student ID constraint)
     if (cleanStudentId) {
       const [existingStudentId] = await connection.query('SELECT id FROM users WHERE student_id = ?', [cleanStudentId]);
       if (existingStudentId.length > 0) {
@@ -73,11 +69,9 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 3. Salt and hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 4. Insert user with UNIVERSITY properly stored in DB
     const [result] = await connection.query(`
       INSERT INTO users (name, email, password, student_id, role, department, university, level_term, target_cgpa)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -95,7 +89,6 @@ router.post('/register', async (req, res) => {
 
     const userId = result.insertId;
 
-    // 5. Create default semester for students atomically
     if (userRole === 'STUDENT') {
       await connection.query(`
         INSERT INTO semesters (user_id, name, term_order, is_completed)
@@ -103,7 +96,6 @@ router.post('/register', async (req, res) => {
       `, [userId, term]);
     }
 
-    // Commit Transaction
     await connection.commit();
 
     const token = jwt.sign(
@@ -137,7 +129,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -181,12 +172,10 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me
 router.get('/me', authenticateToken, async (req, res) => {
   return res.json({ user: req.user });
 });
 
-// PUT /api/auth/profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const { name, target_cgpa, current_cgpa, completed_credits, level_term, department } = req.body;

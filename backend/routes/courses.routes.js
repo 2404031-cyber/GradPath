@@ -3,7 +3,6 @@ const router = express.Router();
 const { getPool, calculateGrade } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
-// GET /api/courses
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
@@ -22,7 +21,6 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/courses
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { semester_id, code, title, credits, marks, grade, grade_point, is_retake, attendance_held, attendance_attended, difficulty } = req.body;
@@ -33,7 +31,6 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const pool = getPool();
 
-    // Verify semester belongs to user
     const [sem] = await pool.query('SELECT id FROM semesters WHERE id = ? AND user_id = ?', [semester_id, req.user.id]);
     if (sem.length === 0) {
       return res.status(400).json({ error: 'Invalid semester selected.' });
@@ -100,7 +97,6 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/courses/:id
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const courseId = req.params.id;

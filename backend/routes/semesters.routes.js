@@ -3,7 +3,6 @@ const router = express.Router();
 const { getPool, calculateGrade } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
-// GET /api/semesters - get all semesters with courses and calculated SGPA
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
@@ -57,7 +56,6 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/semesters - create semester
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, term_order, is_completed } = req.body;
@@ -88,7 +86,6 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/semesters/:id
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const semId = req.params.id;
@@ -109,7 +106,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/semesters/:id
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const semId = req.params.id;

@@ -3,8 +3,6 @@ const router = express.Router();
 const { getPool } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
-// 1. GET /api/study/schedule - Smart Study Schedule & Priority Engine
-// Priority Formula: (Credits * Difficulty) / DaysLeft
 router.get('/schedule', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
@@ -18,7 +16,6 @@ router.get('/schedule', authenticateToken, async (req, res) => {
       ORDER BY sp.priority_score DESC, sp.days_left ASC
     `, [userId]);
 
-    // Recalculate priority scores dynamically based on credits, difficulty, days_left
     let totalScore = 0;
     const computedTasks = tasks.map(t => {
       const credits = parseFloat(t.credits) || 3.0;
@@ -34,7 +31,6 @@ router.get('/schedule', authenticateToken, async (req, res) => {
       };
     });
 
-    // Allocate weekly available hours (default 24 study hours per week)
     const weeklyHours = 24.0;
     const prioritizedTasks = computedTasks.map(t => {
       const share = totalScore > 0 ? (t.computed_priority / totalScore) * weeklyHours : 4.0;
@@ -56,7 +52,6 @@ router.get('/schedule', authenticateToken, async (req, res) => {
   }
 });
 
-// 2. POST /api/study/tasks - Create new study task
 router.post('/tasks', authenticateToken, async (req, res) => {
   try {
     const { course_id, title, allocated_hours, days_left, exam_date, notes } = req.body;
@@ -86,7 +81,6 @@ router.post('/tasks', authenticateToken, async (req, res) => {
   }
 });
 
-// 3. PUT /api/study/tasks/:id - Update task or toggle status
 router.put('/tasks/:id', authenticateToken, async (req, res) => {
   try {
     const taskId = req.params.id;
@@ -121,7 +115,6 @@ router.put('/tasks/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. DELETE /api/study/tasks/:id
 router.delete('/tasks/:id', authenticateToken, async (req, res) => {
   try {
     const taskId = req.params.id;
@@ -134,7 +127,6 @@ router.delete('/tasks/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 5. POST /api/study/pomodoro - Log completed focus session
 router.post('/pomodoro', authenticateToken, async (req, res) => {
   try {
     const { course_id, session_type, duration_minutes, topic } = req.body;
@@ -161,7 +153,6 @@ router.post('/pomodoro', authenticateToken, async (req, res) => {
   }
 });
 
-// 6. GET /api/study/pomodoro/stats - Focus statistics
 router.get('/pomodoro/stats', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();

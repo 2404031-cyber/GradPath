@@ -3,12 +3,10 @@ const router = express.Router();
 const { getPool, calculateGrade } = require('../config/db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
-// GET /api/admin/overview
 router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const pool = getPool();
 
-    // 1. All students
     const [students] = await pool.query(`
       SELECT id, name, email, student_id, department, university, level_term, target_cgpa, completed_credits, created_at
       FROM users
@@ -16,7 +14,6 @@ router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
       ORDER BY id ASC
     `);
 
-    // 2. Compute live CGPA for each student
     const [courses] = await pool.query('SELECT user_id, credits, grade_point FROM courses WHERE grade_point IS NOT NULL');
 
     const studentsWithCgpa = students.map(s => {
@@ -38,14 +35,12 @@ router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
       };
     });
 
-    // 3. Dept stats
     const totalStudents = students.length;
     const totalDeptCourses = courses.length;
     const avgCgpa = totalStudents > 0
       ? parseFloat((studentsWithCgpa.reduce((acc, s) => acc + s.live_cgpa, 0) / totalStudents).toFixed(2))
       : 0.00;
 
-    // 4. Attendance alerts across department
     const [lowAttendanceCourses] = await pool.query(`
       SELECT c.code, c.title, c.attendance_held, c.attendance_attended, u.name as student_name, u.student_id
       FROM courses c
@@ -69,7 +64,6 @@ router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/student/:id
 router.get('/student/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const studentId = req.params.id;

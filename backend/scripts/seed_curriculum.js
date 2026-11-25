@@ -10,7 +10,6 @@ async function seedRealCurriculum() {
   });
   console.log('Connected to MySQL...');
 
-  // Create otp_codes table if not exists
   await conn.query(`
     CREATE TABLE IF NOT EXISTS otp_codes (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -26,7 +25,6 @@ async function seedRealCurriculum() {
   const adminPass = await bcrypt.hash('Admin@12345', 10);
   const studentPass = await bcrypt.hash('Student@12345', 10);
 
-  // 1. Update Admin (Md. Abdullah - Lecturer, CySE)
   await conn.query(`
     UPDATE users 
     SET name = 'Md. Abdullah (Lecturer & Faculty Admin)',
@@ -40,7 +38,6 @@ async function seedRealCurriculum() {
     WHERE id = 1
   `, [adminPass]);
 
-  // 2. Update Student 1 (Kawsar)
   await conn.query(`
     UPDATE users 
     SET name = 'Md. Mobinur Mustofa Kawsar',
@@ -55,7 +52,6 @@ async function seedRealCurriculum() {
     WHERE id = 2
   `, [studentPass]);
 
-  // 3. Update Student 2 (Tamim)
   await conn.query(`
     UPDATE users 
     SET name = 'Md. Manjarul Islam Tamim',
@@ -70,10 +66,8 @@ async function seedRealCurriculum() {
     WHERE id = 3
   `, [studentPass]);
 
-  // Clean old semesters and courses for Kawsar and Tamim
   await conn.query('DELETE FROM semesters WHERE user_id IN (2, 3)');
 
-  // 2025-26 (L-1, T-1) Official Courses from Syllabus Image
   const l1t1_courses = [
     { code: 'CySE 111', title: 'Structured Programming Language', credits: 3.0, marks: 82, held: 28, attended: 27 },
     { code: 'CySE 112', title: 'Structured Programming Language Sessional', credits: 1.5, marks: 85, held: 14, attended: 14 },
@@ -85,7 +79,6 @@ async function seedRealCurriculum() {
     { code: 'CySE 110', title: 'Presentation Skills Development Sessional', credits: 1.5, marks: 85, held: 14, attended: 14 }
   ];
 
-  // 2024-25 (L-2, T-1) Official Courses from Syllabus Image (Current Term)
   const l2t1_courses = [
     { code: 'CSE 201', title: 'Database Management System', credits: 3.0, held: 24, attended: 23 },
     { code: 'CSE 202', title: 'Database Management System Sessional', credits: 1.5, held: 12, attended: 12 },
@@ -108,7 +101,6 @@ async function seedRealCurriculum() {
   }
 
   for (const uid of [2, 3]) {
-    // Semester 1: Level 1, Term 1 (Completed)
     const [s1] = await conn.query('INSERT INTO semesters (user_id, name, term_order, is_completed) VALUES (?, ?, 1, 1)', [uid, 'Level 1, Term 1']);
     let totalPts = 0;
     let totalCrs = 0;
@@ -122,7 +114,6 @@ async function seedRealCurriculum() {
       `, [s1.insertId, uid, c.code, c.title, c.credits, c.marks, g.grade, g.gp, c.held, c.attended]);
     }
 
-    // Semester 2: Level 2, Term 1 (Running)
     const [s2] = await conn.query('INSERT INTO semesters (user_id, name, term_order, is_completed) VALUES (?, ?, 2, 0)', [uid, 'Level 2, Term 1']);
     for (const c of l2t1_courses) {
       await conn.query(`
@@ -131,7 +122,6 @@ async function seedRealCurriculum() {
       `, [s2.insertId, uid, c.code, c.title, c.credits, c.held, c.attended]);
     }
 
-    // Update user completed credits
     await conn.query('UPDATE users SET completed_credits = ? WHERE id = ?', [totalCrs, uid]);
   }
 
