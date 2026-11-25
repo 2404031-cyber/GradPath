@@ -17,7 +17,7 @@ async function authenticateToken(req, res, next) {
 
     const pool = getPool();
     const [rows] = await pool.query(
-      'SELECT id, name, email, student_id, role, department, university, level_term, target_cgpa, current_cgpa, completed_credits FROM users WHERE id = ?',
+      'SELECT id, name, email, student_id, role, department, university, level_term, target_cgpa, current_cgpa, completed_credits, baseline_cgpa, baseline_credits FROM users WHERE id = ?',
       [decoded.userId]
     );
 

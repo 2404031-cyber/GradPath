@@ -9,11 +9,22 @@ export default function TargetPredictor({ cgpaData, t, lang }) {
 
   const [targetCgpa, setTargetCgpa] = useState(cgpaData?.target_cgpa || 3.80);
   const [remainingCredits, setRemainingCredits] = useState(
-    Math.max(140 - (cgpaData?.completed_credits || 25), 15)
+    Math.max(140 - (cgpaData?.completed_credits || 0), 3)
   );
   const [semsLeft, setSemsLeft] = useState(5);
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!useCustomOverride && cgpaData) {
+      if (cgpaData.target_cgpa) {
+        setTargetCgpa(cgpaData.target_cgpa);
+      }
+      if (cgpaData.completed_credits !== undefined) {
+        setRemainingCredits(Math.max(140 - cgpaData.completed_credits, 3));
+      }
+    }
+  }, [cgpaData?.completed_credits, cgpaData?.target_cgpa, useCustomOverride]);
 
   const fetchPrediction = async () => {
     setLoading(true);
@@ -40,7 +51,7 @@ export default function TargetPredictor({ cgpaData, t, lang }) {
 
   useEffect(() => {
     fetchPrediction();
-  }, [targetCgpa, remainingCredits, semsLeft, useCustomOverride, customCurrentCgpa, customCompletedCredits]);
+  }, [targetCgpa, remainingCredits, semsLeft, useCustomOverride, customCurrentCgpa, customCompletedCredits, cgpaData?.cgpa, cgpaData?.completed_credits]);
 
   const loadUserScenario298to397 = () => {
     setUseCustomOverride(true);
@@ -145,13 +156,19 @@ export default function TargetPredictor({ cgpaData, t, lang }) {
             </div>
           ) : (
             /* Current CGPA Reference from DB */
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                {t.currentCgpa} (Database)
-              </span>
-              <span className="text-sm font-extrabold text-slate-900 dark:text-white">
-                {cgpaData?.cgpa?.toFixed(2) || '0.00'} / 4.00
-              </span>
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  {t.currentCgpa} (Database)
+                </span>
+                <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                  {cgpaData?.cgpa?.toFixed(2) || '0.00'} / 4.00
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                <span>{lang === 'bn' ? 'সম্পন্ন ক্রেডিট (Cd)' : 'Completed Credits (Cd)'}</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">{cgpaData?.completed_credits?.toFixed(1) || '0.0'} cr</span>
+              </div>
             </div>
           )}
 

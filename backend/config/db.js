@@ -64,7 +64,10 @@ async function createTables() {
         university VARCHAR(150) DEFAULT '',
         level_term VARCHAR(50) DEFAULT 'Level 2, Term 1',
         target_cgpa DECIMAL(3,2) DEFAULT 3.80,
+        current_cgpa DECIMAL(3,2) DEFAULT 0.00,
         completed_credits DECIMAL(5,2) DEFAULT 0.00,
+        baseline_cgpa DECIMAL(3,2) DEFAULT 0.00,
+        baseline_credits DECIMAL(5,2) DEFAULT 0.00,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -77,6 +80,14 @@ async function createTables() {
 
     try {
       await connection.query('ALTER TABLE users ADD COLUMN current_cgpa DECIMAL(3,2) DEFAULT 0.00');
+    } catch (e) {}
+
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN baseline_cgpa DECIMAL(3,2) DEFAULT 0.00');
+    } catch (e) {}
+
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN baseline_credits DECIMAL(5,2) DEFAULT 0.00');
     } catch (e) {}
 
     await connection.query(`

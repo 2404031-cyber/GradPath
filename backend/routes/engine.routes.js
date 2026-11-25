@@ -3,106 +3,120 @@ const router = express.Router();
 const { getPool, calculateGrade } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
+async function getUserAcademicSummary(pool, userId) {
+  const [userRows] = await pool.query(
+    'SELECT target_cgpa, baseline_cgpa, baseline_credits FROM users WHERE id = ?',
+    [userId]
+  );
+  const targetCgpa = userRows.length > 0 && userRows[0].target_cgpa ? parseFloat(userRows[0].target_cgpa) : 3.80;
+  const baselineCgpa = userRows.length > 0 && userRows[0].baseline_cgpa ? parseFloat(userRows[0].baseline_cgpa) : 0.00;
+  const baselineCredits = userRows.length > 0 && userRows[0].baseline_credits ? parseFloat(userRows[0].baseline_credits) : 0.00;
+
+  const [semesters] = await pool.query(
+    'SELECT * FROM semesters WHERE user_id = ? ORDER BY term_order ASC',
+    [userId]
+  );
+
+  const [courses] = await pool.query(
+    'SELECT * FROM courses WHERE user_id = ? ORDER BY id ASC',
+    [userId]
+  );
+
+  let coursePoints = 0;
+  let courseCredits = 0;
+  let attemptedCourseCredits = 0;
+  let passedCourseCredits = 0;
+
+  const semesterBreakdown = semesters.map(sem => {
+    const semCourses = courses.filter(c => c.semester_id === sem.id);
+    let semPoints = 0;
+    let semCredits = 0;
+
+    semCourses.forEach(c => {
+      const credit = parseFloat(c.credits) || 0;
+      attemptedCourseCredits += credit;
+      if (c.grade_point !== null && c.grade_point !== undefined) {
+        const gp = parseFloat(c.grade_point);
+        semPoints += gp * credit;
+        semCredits += credit;
+        coursePoints += gp * credit;
+        courseCredits += credit;
+        if (gp > 0) passedCourseCredits += credit;
+      }
+    });
+
+    const sgpa = semCredits > 0 ? parseFloat((semPoints / semCredits).toFixed(2)) : null;
+    return {
+      semester_id: sem.id,
+      name: sem.name,
+      sgpa,
+      credits: semCredits,
+      is_completed: Boolean(sem.is_completed),
+      course_count: semCourses.length
+    };
+  });
+
+  const baselinePoints = baselineCgpa * baselineCredits;
+  const totalPoints = baselinePoints + coursePoints;
+  const completedCredits = baselineCredits + courseCredits;
+  const cgpa = completedCredits > 0 ? parseFloat((totalPoints / completedCredits).toFixed(2)) : 0.00;
+
+  return {
+    cgpa,
+    rawCgpa: completedCredits > 0 ? totalPoints / completedCredits : 0.00,
+    targetCgpa,
+    baselineCgpa,
+    baselineCredits,
+    courseCredits,
+    totalPoints,
+    completedCredits,
+    attemptedCredits: attemptedCourseCredits + baselineCredits,
+    passedCredits: passedCourseCredits + baselineCredits,
+    semesterBreakdown
+  };
+}
+
 router.get('/cgpa', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
     const userId = req.user.id;
-
-    const [userRows] = await pool.query('SELECT target_cgpa, current_cgpa, completed_credits FROM users WHERE id = ?', [userId]);
-    const targetCgpa = userRows.length > 0 && userRows[0].target_cgpa ? parseFloat(userRows[0].target_cgpa) : 3.80;
-    const manualCgpa = userRows.length > 0 && userRows[0].current_cgpa ? parseFloat(userRows[0].current_cgpa) : 0.00;
-    const manualCredits = userRows.length > 0 && userRows[0].completed_credits ? parseFloat(userRows[0].completed_credits) : 0.00;
-
-    const [semesters] = await pool.query(
-      'SELECT * FROM semesters WHERE user_id = ? ORDER BY term_order ASC',
-      [userId]
-    );
-
-    const [courses] = await pool.query(
-      'SELECT * FROM courses WHERE user_id = ? ORDER BY id ASC',
-      [userId]
-    );
-
-    let totalPoints = 0;
-    let completedCredits = 0;
-    let attemptedCredits = 0;
-    let passedCredits = 0;
-
-    const semesterBreakdown = semesters.map(sem => {
-      const semCourses = courses.filter(c => c.semester_id === sem.id);
-      let semPoints = 0;
-      let semCredits = 0;
-
-      semCourses.forEach(c => {
-        const credit = parseFloat(c.credits) || 0;
-        attemptedCredits += credit;
-        if (c.grade_point !== null && c.grade_point !== undefined) {
-          const gp = parseFloat(c.grade_point);
-          semPoints += gp * credit;
-          semCredits += credit;
-          totalPoints += gp * credit;
-          completedCredits += credit;
-          if (gp > 0) passedCredits += credit;
-        }
-      });
-
-      const sgpa = semCredits > 0 ? parseFloat((semPoints / semCredits).toFixed(2)) : null;
-      return {
-        semester_id: sem.id,
-        name: sem.name,
-        sgpa,
-        credits: semCredits,
-        is_completed: Boolean(sem.is_completed),
-        course_count: semCourses.length
-      };
-    });
-
-    let cgpa = 0.00;
-    let finalCompletedCredits = 0.00;
-
-    if (completedCredits > 0 && manualCredits > 0 && manualCgpa > 0) {
-      const combinedPoints = (manualCgpa * manualCredits) + totalPoints;
-      finalCompletedCredits = manualCredits + completedCredits;
-      cgpa = parseFloat((combinedPoints / finalCompletedCredits).toFixed(2));
-    } else if (completedCredits > 0) {
-      cgpa = parseFloat((totalPoints / completedCredits).toFixed(2));
-      finalCompletedCredits = completedCredits;
-    } else if (manualCgpa > 0) {
-      cgpa = manualCgpa;
-      finalCompletedCredits = manualCredits;
-    }
+    const summary = await getUserAcademicSummary(pool, userId);
 
     let standing = 'Good Standing';
     let standingColor = 'emerald';
-    if (cgpa >= 3.75) {
+    if (summary.cgpa >= 3.75) {
       standing = 'Distinction (First Class)';
       standingColor = 'emerald';
-    } else if (cgpa >= 3.00) {
+    } else if (summary.cgpa >= 3.00) {
       standing = 'Good Standing';
       standingColor = 'sky';
-    } else if (cgpa >= 2.50) {
+    } else if (summary.cgpa >= 2.50) {
       standing = 'Satisfactory';
       standingColor = 'amber';
-    } else if (finalCompletedCredits > 0) {
+    } else if (summary.completedCredits > 0) {
       standing = 'Academic Warning (Probation Risk)';
       standingColor = 'rose';
     }
 
-    if (completedCredits > 0) {
-      await pool.query('UPDATE users SET current_cgpa = ?, completed_credits = ? WHERE id = ?', [cgpa, finalCompletedCredits, userId]);
-    }
+    await pool.query(
+      'UPDATE users SET current_cgpa = ?, completed_credits = ? WHERE id = ?',
+      [summary.cgpa, summary.completedCredits, userId]
+    );
 
     return res.json({
-      cgpa,
-      target_cgpa: targetCgpa,
-      completed_credits: finalCompletedCredits,
-      attempted_credits: attemptedCredits + (finalCompletedCredits > completedCredits ? manualCredits : 0),
-      passed_credits: passedCredits + (finalCompletedCredits > completedCredits ? manualCredits : 0),
+      cgpa: summary.cgpa,
+      target_cgpa: summary.targetCgpa,
+      baseline_cgpa: summary.baselineCgpa,
+      baseline_credits: summary.baselineCredits,
+      course_credits: summary.courseCredits,
+      completed_credits: summary.completedCredits,
+      attempted_credits: summary.attemptedCredits,
+      passed_credits: summary.passedCredits,
       total_degree_credits: 140.0,
-      completion_percentage: parseFloat(((completedCredits / 140.0) * 100).toFixed(1)),
+      completion_percentage: parseFloat(((summary.completedCredits / 140.0) * 100).toFixed(1)),
       standing,
       standingColor,
-      semester_breakdown: semesterBreakdown
+      semester_breakdown: summary.semesterBreakdown
     });
   } catch (error) {
     console.error('CGPA calculation error:', error);
@@ -110,7 +124,6 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
   }
 });
 
-// Formula: Required GPA = [ Target * (Cd + Cn) - (Current_CGPA * Cd) ] / Cn
 router.post('/target-predict', authenticateToken, async (req, res) => {
   try {
     const { target_cgpa, remaining_credits, total_semesters_left, custom_current_cgpa, custom_completed_credits } = req.body;
@@ -127,22 +140,14 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
         : 36.0;
       totalPoints = currentCGPA * completedCredits;
     } else {
-      const [courses] = await pool.query(
-        'SELECT credits, grade_point FROM courses WHERE user_id = ? AND grade_point IS NOT NULL',
-        [req.user.id]
-      );
-
-      courses.forEach(c => {
-        const cr = parseFloat(c.credits);
-        const gp = parseFloat(c.grade_point);
-        totalPoints += cr * gp;
-        completedCredits += cr;
-      });
-
-      currentCGPA = completedCredits > 0 ? totalPoints / completedCredits : 0;
+      const summary = await getUserAcademicSummary(pool, req.user.id);
+      currentCGPA = summary.rawCgpa;
+      completedCredits = summary.completedCredits;
+      totalPoints = summary.totalPoints;
     }
+
     const target = target_cgpa ? parseFloat(target_cgpa) : 3.80;
-    const remCredits = remaining_credits ? parseFloat(remaining_credits) : Math.max(140 - completedCredits, 18);
+    const remCredits = remaining_credits ? parseFloat(remaining_credits) : Math.max(140 - completedCredits, 15);
     const semsLeft = total_semesters_left ? parseInt(total_semesters_left, 10) : 5;
 
     const totalCredits = completedCredits + remCredits;
@@ -157,7 +162,7 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
     if (requiredGPA > 4.00) {
       status = 'Mathematically Unreachable';
       feasible = false;
-      message = `To achieve a ${target.toFixed(2)} CGPA, you would need an average GPA of ${requiredGPA.toFixed(2)}, which exceeds the maximum possible 4.00 scale. Consider retaking low-grade courses or adjusting your target to ${( (totalPoints + 4.00 * remCredits) / totalCredits ).toFixed(2)}.`;
+      message = `To achieve a ${target.toFixed(2)} CGPA, you would need an average GPA of ${requiredGPA.toFixed(2)}, which exceeds the maximum possible 4.00 scale. Consider retaking low-grade courses or adjusting your target to ${((totalPoints + 4.00 * remCredits) / totalCredits).toFixed(2)}.`;
     } else if (requiredGPA >= 3.75) {
       status = 'High Target (Requires A / A+)';
       message = `You need an average of ${requiredGPA.toFixed(2)} in remaining ${remCredits} credits. Maintain consistent A and A+ grades.`;
@@ -179,7 +184,7 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
         semester_index: i,
         name: `Upcoming Term ${i}`,
         estimated_credits: parseFloat(creditsPerSem),
-        recommended_gpa: Math.min(Math.max(parseFloat(requiredGPA.toFixed(2)), 2.00), 4.00)
+        recommended_gpa: parseFloat(Math.max(requiredGPA, 0).toFixed(2))
       });
     }
 
@@ -188,7 +193,7 @@ router.post('/target-predict', authenticateToken, async (req, res) => {
       target_cgpa: target,
       completed_credits: completedCredits,
       remaining_credits: remCredits,
-      required_gpa: parseFloat(requiredGPA.toFixed(2)),
+      required_gpa: parseFloat(Math.max(requiredGPA, 0).toFixed(2)),
       max_possible_cgpa: parseFloat(((totalPoints + 4.00 * remCredits) / totalCredits).toFixed(2)),
       feasible,
       status,
@@ -209,21 +214,10 @@ router.post('/whatif', authenticateToken, async (req, res) => {
     }
 
     const pool = getPool();
-    const [existingCourses] = await pool.query(
-      'SELECT credits, grade_point FROM courses WHERE user_id = ? AND grade_point IS NOT NULL',
-      [req.user.id]
-    );
-
-    let curPoints = 0;
-    let curCredits = 0;
-    existingCourses.forEach(c => {
-      const cr = parseFloat(c.credits);
-      const gp = parseFloat(c.grade_point);
-      curPoints += cr * gp;
-      curCredits += cr;
-    });
-
-    const currentCGPA = curCredits > 0 ? curPoints / curCredits : 0;
+    const summary = await getUserAcademicSummary(pool, req.user.id);
+    const curPoints = summary.totalPoints;
+    const curCredits = summary.completedCredits;
+    const currentCGPA = summary.rawCgpa;
 
     let simPoints = 0;
     let simCredits = 0;
@@ -242,7 +236,7 @@ router.post('/whatif', authenticateToken, async (req, res) => {
     const newTotalCredits = curCredits + simCredits;
     const projectedCGPA = newTotalCredits > 0 ? newTotalPoints / newTotalCredits : 0;
     const simulatedTermSGPA = simCredits > 0 ? simPoints / simCredits : 0;
-    const diff = projectedCGPA - currentCGPA;
+    const diff = parseFloat(projectedCGPA.toFixed(2)) - parseFloat(currentCGPA.toFixed(2));
 
     return res.json({
       current_cgpa: parseFloat(currentCGPA.toFixed(2)),
@@ -262,6 +256,7 @@ router.post('/whatif', authenticateToken, async (req, res) => {
 router.get('/retake-planner', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
+    const summary = await getUserAcademicSummary(pool, req.user.id);
     const [courses] = await pool.query(`
       SELECT c.*, s.name as semester_name
       FROM courses c
@@ -270,16 +265,8 @@ router.get('/retake-planner', authenticateToken, async (req, res) => {
       ORDER BY c.grade_point ASC
     `, [req.user.id]);
 
-    let totalPoints = 0;
-    let totalCredits = 0;
-    courses.forEach(c => {
-      const cr = parseFloat(c.credits);
-      const gp = parseFloat(c.grade_point);
-      totalPoints += cr * gp;
-      totalCredits += cr;
-    });
-
-    const currentCGPA = totalCredits > 0 ? totalPoints / totalCredits : 0;
+    const totalCredits = summary.completedCredits;
+    const currentCGPA = summary.rawCgpa;
 
     const retakeCandidates = courses
       .filter(c => parseFloat(c.grade_point) <= 3.25)

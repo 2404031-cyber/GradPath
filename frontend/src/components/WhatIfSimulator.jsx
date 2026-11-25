@@ -41,7 +41,7 @@ export default function WhatIfSimulator({ cgpaData, t, lang }) {
 
   useEffect(() => {
     runSimulation();
-  }, [courses]);
+  }, [courses, cgpaData?.cgpa, cgpaData?.completed_credits]);
 
   const addHypotheticalCourse = () => {
     const newId = courses.length > 0 ? Math.max(...courses.map(c => c.id)) + 1 : 1;

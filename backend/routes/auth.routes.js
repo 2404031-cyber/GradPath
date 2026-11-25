@@ -178,7 +178,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { name, target_cgpa, current_cgpa, completed_credits, level_term, department } = req.body;
+    const { name, target_cgpa, baseline_cgpa, baseline_credits, current_cgpa, completed_credits, level_term, department } = req.body;
     const pool = getPool();
 
     const updates = [];
@@ -192,12 +192,18 @@ router.put('/profile', authenticateToken, async (req, res) => {
       updates.push('target_cgpa = ?');
       values.push(parseFloat(target_cgpa));
     }
-    if (current_cgpa !== undefined && current_cgpa !== null && current_cgpa !== '') {
-      updates.push('current_cgpa = ?');
+    if (baseline_cgpa !== undefined && baseline_cgpa !== null && baseline_cgpa !== '') {
+      updates.push('baseline_cgpa = ?');
+      values.push(parseFloat(baseline_cgpa));
+    } else if (current_cgpa !== undefined && current_cgpa !== null && current_cgpa !== '') {
+      updates.push('baseline_cgpa = ?');
       values.push(parseFloat(current_cgpa));
     }
-    if (completed_credits !== undefined && completed_credits !== null && completed_credits !== '') {
-      updates.push('completed_credits = ?');
+    if (baseline_credits !== undefined && baseline_credits !== null && baseline_credits !== '') {
+      updates.push('baseline_credits = ?');
+      values.push(parseFloat(baseline_credits));
+    } else if (completed_credits !== undefined && completed_credits !== null && completed_credits !== '') {
+      updates.push('baseline_credits = ?');
       values.push(parseFloat(completed_credits));
     }
     if (level_term) {
@@ -217,7 +223,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await pool.query(
-      'SELECT id, name, email, student_id, role, department, university, level_term, target_cgpa, current_cgpa, completed_credits FROM users WHERE id = ?',
+      'SELECT id, name, email, student_id, role, department, university, level_term, target_cgpa, current_cgpa, completed_credits, baseline_cgpa, baseline_credits FROM users WHERE id = ?',
       [req.user.id]
     );
 

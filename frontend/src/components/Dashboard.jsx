@@ -119,8 +119,8 @@ export default function Dashboard({
     try {
       setCgpaSaving(true);
       await api.updateProfile({
-        current_cgpa: manualCgpa !== '' ? parseFloat(manualCgpa) : 0.00,
-        completed_credits: manualCredits !== '' ? parseFloat(manualCredits) : 0.00,
+        baseline_cgpa: manualCgpa !== '' ? parseFloat(manualCgpa) : 0.00,
+        baseline_credits: manualCredits !== '' ? parseFloat(manualCredits) : 0.00,
         target_cgpa: manualTarget !== '' ? parseFloat(manualTarget) : 3.80
       });
       setIsEditCgpaModal(false);
@@ -350,8 +350,8 @@ export default function Dashboard({
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.currentCgpa}</span>
             <button
               onClick={() => {
-                setManualCgpa(currentCgpa > 0 ? currentCgpa.toString() : '');
-                setManualCredits(cgpaData?.completed_credits ? cgpaData.completed_credits.toString() : '');
+                setManualCgpa(cgpaData?.baseline_cgpa > 0 ? cgpaData.baseline_cgpa.toString() : '');
+                setManualCredits(cgpaData?.baseline_credits > 0 ? cgpaData.baseline_credits.toString() : '');
                 setManualTarget(targetCgpa.toString());
                 setIsEditCgpaModal(true);
               }}
@@ -410,8 +410,8 @@ export default function Dashboard({
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.creditsCompleted}</span>
             <button
               onClick={() => {
-                setManualCgpa(currentCgpa > 0 ? currentCgpa.toString() : '');
-                setManualCredits(cgpaData?.completed_credits ? cgpaData.completed_credits.toString() : '');
+                setManualCgpa(cgpaData?.baseline_cgpa > 0 ? cgpaData.baseline_cgpa.toString() : '');
+                setManualCredits(cgpaData?.baseline_credits > 0 ? cgpaData.baseline_credits.toString() : '');
                 setManualTarget(targetCgpa.toString());
                 setIsEditCgpaModal(true);
               }}
@@ -1247,17 +1247,29 @@ export default function Dashboard({
             </div>
 
             <form onSubmit={handleSaveManualCgpa} className="space-y-3.5">
-              <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
+              <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 space-y-1.5">
                 <p className="text-xs text-emerald-800 dark:text-emerald-300">
                   {lang === 'bn'
-                    ? '💡 আপনি যদি ২য় বা ৩য় বর্ষের শিক্ষার্থী হন, তবে অতীতের সব কোর্স যোগ না করেই সরাসরি আপনার বর্তমান CGPA এবং সম্পন্নকৃত ক্রেডিট এখানে লিখে দিতে পারেন।'
-                    : '💡 If you are already in an advanced semester, you can directly input your current CGPA and completed credits without entering all past individual courses.'}
+                    ? '💡 আপনি যদি ২য় বা ৩য় বর্ষের শিক্ষার্থী হন, তবে অতীতের সব কোর্স যোগ না করেই সরাসরি আপনার পূর্বের CGPA ও ক্রেডিট এখানে লিখতে পারেন। আর সব কোর্স নিচে যোগ করা থাকলে এটি 0 রাখুন।'
+                    : '💡 Enter your previous semesters baseline CGPA & credits (if not entered as courses below). Keep 0 if all your courses are already recorded below.'}
                 </p>
+                {cgpaData?.course_credits > 0 && (
+                  <div className="flex items-center justify-between pt-1 border-t border-emerald-200/60 dark:border-emerald-800/50 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    <span>{lang === 'bn' ? 'সেমিস্টারের কোর্স থেকে ক্রেডিট:' : 'Recorded Courses Credits:'} {cgpaData.course_credits} cr</span>
+                    <button
+                      type="button"
+                      onClick={() => { setManualCgpa('0'); setManualCredits('0'); }}
+                      className="underline text-rose-600 dark:text-rose-400 hover:opacity-80"
+                    >
+                      {lang === 'bn' ? 'বেসলাইন ০ করুন' : 'Reset Baseline to 0'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  {lang === 'bn' ? 'বর্তমান CGPA (Current CGPA)' : 'Current CGPA'}
+                  {lang === 'bn' ? 'পূর্বের / বেসলাইন CGPA (Baseline CGPA)' : 'Previous / Baseline CGPA'}
                 </label>
                 <input
                   type="number"
@@ -1265,7 +1277,7 @@ export default function Dashboard({
                   min="0.00"
                   max="4.00"
                   required
-                  placeholder="e.g. 3.65"
+                  placeholder="e.g. 3.65 (or 0)"
                   value={manualCgpa}
                   onChange={(e) => setManualCgpa(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-extrabold"
@@ -1274,7 +1286,7 @@ export default function Dashboard({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  {lang === 'bn' ? 'সম্পন্নকৃত মোট ক্রেডিট (Credits Completed)' : 'Completed Credits'}
+                  {lang === 'bn' ? 'পূর্বের সম্পন্নকৃত ক্রেডিট (Baseline Credits)' : 'Previous / Baseline Credits'}
                 </label>
                 <input
                   type="number"
@@ -1282,7 +1294,7 @@ export default function Dashboard({
                   min="0.0"
                   max="160.0"
                   required
-                  placeholder="e.g. 26.0"
+                  placeholder="e.g. 26.0 (or 0)"
                   value={manualCredits}
                   onChange={(e) => setManualCredits(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-extrabold"
