@@ -2,13 +2,28 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { getPool } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+
   try {
-    const { name, email, password, student_id, department, level_term, target_cgpa, role } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      student_id, 
+      department, 
+      university, 
+      level_term, 
+      target_cgpa, 
+      role, 
+      admin_key 
+    } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email and password are required.' });
@@ -18,48 +33,81 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
     }
 
-    const pool = getPool();
-    // Check if user already exists
-    const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email.trim().toLowerCase()]);
-    if (existing.length > 0) {
-      return res.status(400).json({ error: 'An account with this email already exists.' });
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanStudentId = student_id && student_id.trim() !== '' ? student_id.trim() : null;
+    const cleanName = name.trim();
+    const dept = department ? department.trim() : 'Cyber Security Engineering';
+    const uni = university ? university.trim() : 'University of Frontier Technology, Bangladesh (UFTB)';
+    const term = level_term ? level_term.trim() : 'Level 1, Term 1';
+    const target = target_cgpa ? parseFloat(target_cgpa) : 3.80;
+
+    // Admin Role Protection: Only users with verified Admin Secret Key can register as ADMIN
+    const requestedRole = (role || 'STUDENT').toUpperCase();
+    let userRole = 'STUDENT';
+    if (requestedRole === 'ADMIN') {
+      const validAdminKey = process.env.ADMIN_SECRET_KEY || 'GradPathAdmin@2026';
+      if (!admin_key || admin_key.trim() !== validAdminKey) {
+        return res.status(403).json({
+          error: 'Admin verification failed: Valid Admin Secret Key is required to create an Admin account.'
+        });
+      }
+      userRole = 'ADMIN';
     }
 
-    // Salt and hash password
+    // Begin Database Transaction for Atomic Registration
+    await connection.beginTransaction();
+
+    // 1. Check if email already exists
+    const [existingEmail] = await connection.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+    if (existingEmail.length > 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'An account with this email address already exists.' });
+    }
+
+    // 2. Check if student_id already exists (Unique Student ID constraint)
+    if (cleanStudentId) {
+      const [existingStudentId] = await connection.query('SELECT id FROM users WHERE student_id = ?', [cleanStudentId]);
+      if (existingStudentId.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({ error: 'An account with this Student ID / Faculty ID already exists.' });
+      }
+    }
+
+    // 3. Salt and hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const userRole = role === 'ADMIN' ? 'ADMIN' : 'STUDENT';
-    const dept = department || 'Cyber Security Engineering';
-    const term = level_term || 'Level 1, Term 1';
-    const target = target_cgpa ? parseFloat(target_cgpa) : 3.80;
-
-    const [result] = await pool.query(`
-      INSERT INTO users (name, email, password, student_id, role, department, level_term, target_cgpa)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    // 4. Insert user with UNIVERSITY properly stored in DB
+    const [result] = await connection.query(`
+      INSERT INTO users (name, email, password, student_id, role, department, university, level_term, target_cgpa)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      name.trim(),
-      email.trim().toLowerCase(),
+      cleanName,
+      cleanEmail,
       hashedPassword,
-      student_id ? student_id.trim() : null,
+      cleanStudentId,
       userRole,
       dept,
+      uni,
       term,
       target
     ]);
 
     const userId = result.insertId;
 
-    // Create default semester for students
+    // 5. Create default semester for students atomically
     if (userRole === 'STUDENT') {
-      await pool.query(`
+      await connection.query(`
         INSERT INTO semesters (user_id, name, term_order, is_completed)
         VALUES (?, ?, 1, 0)
       `, [userId, term]);
     }
 
+    // Commit Transaction
+    await connection.commit();
+
     const token = jwt.sign(
-      { userId, email: email.trim().toLowerCase(), role: userRole },
+      { userId, email: cleanEmail, role: userRole },
       process.env.JWT_SECRET || 'gradpath_jwt_secret_key_2026_super_secure',
       { expiresIn: '7d' }
     );
@@ -69,20 +117,23 @@ router.post('/register', async (req, res) => {
       token,
       user: {
         id: userId,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        student_id: student_id ? student_id.trim() : null,
+        name: cleanName,
+        email: cleanEmail,
+        student_id: cleanStudentId,
         role: userRole,
         department: dept,
-        university: req.body.university ? req.body.university.trim() : '',
+        university: uni,
         level_term: term,
         target_cgpa: target,
         completed_credits: 0.00
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    return res.status(500).json({ error: 'Server error during registration.' });
+    await connection.rollback();
+    console.error('Registration transaction error:', error);
+    return res.status(500).json({ error: 'Server database transaction error during registration.' });
+  } finally {
+    connection.release();
   }
 });
 
@@ -206,23 +257,33 @@ router.post('/send-otp', async (req, res) => {
 
     const user = rows[0];
 
-    // Generate secure 6-digit verification code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Rate Limiting: 60-second cooldown between OTP requests for the same user
+    const [recentOtp] = await pool.query(
+      'SELECT id, created_at FROM otp_codes WHERE email = ? AND created_at > (NOW() - INTERVAL 1 MINUTE) ORDER BY id DESC LIMIT 1',
+      [user.email]
+    );
+
+    if (recentOtp.length > 0) {
+      return res.status(429).json({ error: 'Too many requests. Please wait 60 seconds before requesting a new code.' });
+    }
+
+    // Generate cryptographically secure 6-digit verification code
+    const otpCode = crypto.randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Clean previous OTPs for this user
+    // Clean previous unverified OTPs for this user
     await pool.query('DELETE FROM otp_codes WHERE email = ?', [user.email]);
 
-    // Insert new OTP
+    // Insert new OTP with attempts counter and is_used flag
     await pool.query(`
-      INSERT INTO otp_codes (email, otp, expires_at)
-      VALUES (?, ?, ?)
+      INSERT INTO otp_codes (email, otp, attempts, is_used, expires_at)
+      VALUES (?, ?, 0, 0, ?)
     `, [user.email, otpCode, expiresAt]);
 
     return res.json({
       message: `Verification code sent to ${user.email}. Enter the 6-digit code to verify your identity.`,
       email: user.email,
-      otp: otpCode // Returned for instant testing and display
+      otp: otpCode // Returned for testing & on-screen verification banner
     });
   } catch (error) {
     console.error('Send OTP error:', error);
@@ -256,23 +317,48 @@ router.post('/reset-password', async (req, res) => {
 
     const user = rows[0];
 
-    // Verify 6-digit OTP
+    // Verify active OTP
     const [otpRows] = await pool.query(`
       SELECT * FROM otp_codes 
-      WHERE email = ? AND otp = ? AND expires_at > NOW() 
+      WHERE email = ? AND is_used = 0 AND expires_at > NOW() 
       ORDER BY id DESC LIMIT 1
-    `, [user.email, otp.trim()]);
+    `, [user.email]);
 
     if (otpRows.length === 0) {
       return res.status(400).json({ error: 'Invalid or expired 6-digit verification code. Please request a new code.' });
     }
 
+    const otpRecord = otpRows[0];
+
+    // Brute-force protection: Max 5 failed attempts per code
+    if (otpRecord.attempts >= 5) {
+      await pool.query('DELETE FROM otp_codes WHERE id = ?', [otpRecord.id]);
+      return res.status(429).json({ error: 'Maximum verification attempts exceeded. This code has been invalidated. Please request a new code.' });
+    }
+
+    if (otpRecord.otp !== otp.trim()) {
+      const newAttempts = (otpRecord.attempts || 0) + 1;
+      if (newAttempts >= 5) {
+        await pool.query('DELETE FROM otp_codes WHERE id = ?', [otpRecord.id]);
+        return res.status(429).json({
+          error: 'Maximum verification attempts exceeded. This code has been invalidated. Please request a new code.'
+        });
+      }
+      await pool.query('UPDATE otp_codes SET attempts = ? WHERE id = ?', [newAttempts, otpRecord.id]);
+      const remaining = 5 - newAttempts;
+      return res.status(400).json({
+        error: `Incorrect verification code. ${remaining} attempt(s) remaining.`
+      });
+    }
+
+    // Salt and hash new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(new_password, salt);
 
     await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
 
-    // Invalidate OTP after successful reset
+    // Single use: Mark OTP used and remove
+    await pool.query('UPDATE otp_codes SET is_used = 1 WHERE id = ?', [otpRecord.id]);
     await pool.query('DELETE FROM otp_codes WHERE email = ?', [user.email]);
 
     return res.json({

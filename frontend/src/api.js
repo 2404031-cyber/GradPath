@@ -97,6 +97,12 @@ function handleClientFallback(endpoint, options = {}) {
 
   // Auth: Register
   if (endpoint.startsWith('/auth/register') && method === 'POST') {
+    if (body.role === 'ADMIN' && body.admin_key !== 'GradPathAdmin@2026') {
+      throw new Error('Admin verification failed: Valid Admin Secret Key is required to create an Admin account.');
+    }
+    if (body.student_id && (body.student_id === '2404031' || body.student_id === '2404026')) {
+      throw new Error('An account with this Student ID / Faculty ID already exists.');
+    }
     const user = {
       id: Date.now(),
       name: body.name || 'New Student',

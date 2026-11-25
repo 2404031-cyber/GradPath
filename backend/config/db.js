@@ -64,7 +64,7 @@ async function createTables() {
         name VARCHAR(150) NOT NULL,
         email VARCHAR(150) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
-        student_id VARCHAR(50) DEFAULT NULL,
+        student_id VARCHAR(50) UNIQUE DEFAULT NULL,
         role ENUM('STUDENT', 'ADMIN') DEFAULT 'STUDENT',
         department VARCHAR(150) DEFAULT 'Cyber Security Engineering',
         university VARCHAR(150) DEFAULT '',
@@ -75,6 +75,13 @@ async function createTables() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    // Ensure student_id is unique in existing tables
+    try {
+      await connection.query('ALTER TABLE users ADD UNIQUE KEY unique_student_id (student_id)');
+    } catch (e) {
+      // Index already exists
+    }
 
     // Semesters table
     await connection.query(`
@@ -147,17 +154,27 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // OTP Codes table for verified password reset
+    // OTP Codes table for verified password reset with attempts & usage tracking
     await connection.query(`
       CREATE TABLE IF NOT EXISTS otp_codes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(150) NOT NULL,
         otp VARCHAR(10) NOT NULL,
+        attempts INT DEFAULT 0,
+        is_used TINYINT(1) DEFAULT 0,
         expires_at DATETIME NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX (email)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    // Ensure columns in existing otp_codes table
+    try {
+      await connection.query('ALTER TABLE otp_codes ADD COLUMN attempts INT DEFAULT 0');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE otp_codes ADD COLUMN is_used TINYINT(1) DEFAULT 0');
+    } catch (e) {}
 
     console.log('[DB] Database tables verified & ready.');
   } finally {

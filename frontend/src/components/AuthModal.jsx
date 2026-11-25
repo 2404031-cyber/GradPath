@@ -31,6 +31,7 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
   const [levelTerm, setLevelTerm] = useState('Level 2, Term 1');
   const [targetCgpa, setTargetCgpa] = useState('3.80');
   const [role, setRole] = useState('STUDENT');
+  const [adminKey, setAdminKey] = useState('');
 
   // Forgot password OTP states
   const [forgotEmail, setForgotEmail] = useState('');
@@ -58,7 +59,8 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
           department,
           level_term: levelTerm,
           target_cgpa: parseFloat(targetCgpa),
-          role
+          role,
+          admin_key: role === 'ADMIN' ? adminKey : undefined
         });
         localStorage.setItem('gradpath_token', res.token);
         onLoginSuccess(res.user);
@@ -448,6 +450,33 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
                       </select>
                     </div>
                   </div>
+
+                  {role === 'ADMIN' && (
+                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-amber-700 dark:text-amber-400">
+                          {lang === 'bn' ? 'অ্যাডমিন সিক্রেট কি (Faculty Verification Key)' : 'Admin / Faculty Secret Key'}
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          (Key: GradPathAdmin@2026)
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-amber-500 absolute left-3.5 top-3" />
+                        <input
+                          type="password"
+                          required
+                          value={adminKey}
+                          onChange={(e) => setAdminKey(e.target.value)}
+                          placeholder="GradPathAdmin@2026"
+                          className="w-full pl-10 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-amber-300 dark:border-amber-700 bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+                        />
+                      </div>
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        {lang === 'bn' ? 'শুধুমাত্র অনুমোদিত শিক্ষক ও অ্যাডমিনরা এই একাউন্ট খুলতে পারবেন।' : 'Only verified instructors and faculty can register an admin profile.'}
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
