@@ -39,13 +39,33 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid semester selected.' });
     }
 
+    const GRADE_POINTS = {
+      'A+': 4.00,
+      'A': 3.75,
+      'A-': 3.50,
+      'B+': 3.25,
+      'B': 3.00,
+      'B-': 2.75,
+      'C+': 2.50,
+      'C': 2.25,
+      'D': 2.00,
+      'F': 0.00
+    };
+
     let finalGrade = grade || null;
-    let finalGP = grade_point !== undefined && grade_point !== null ? parseFloat(grade_point) : null;
+    let finalGP = grade_point !== undefined && grade_point !== null && grade_point !== '' ? parseFloat(grade_point) : null;
 
     if (marks !== undefined && marks !== null && marks !== '') {
       const calc = calculateGrade(marks);
       finalGrade = calc.grade;
       finalGP = calc.grade_point;
+    } else if (finalGrade && finalGrade !== 'In Progress' && finalGrade !== '—' && GRADE_POINTS[finalGrade] !== undefined) {
+      if (finalGP === null) {
+        finalGP = GRADE_POINTS[finalGrade];
+      }
+    } else if (finalGrade === 'In Progress' || finalGrade === '—') {
+      finalGrade = null;
+      finalGP = null;
     }
 
     const [result] = await pool.query(`
@@ -89,12 +109,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const pool = getPool();
 
     let finalGrade = grade;
-    let finalGP = grade_point;
+    let finalGP = grade_point !== undefined && grade_point !== null && grade_point !== '' ? parseFloat(grade_point) : null;
 
     if (marks !== undefined && marks !== null && marks !== '') {
       const calc = calculateGrade(marks);
       finalGrade = calc.grade;
       finalGP = calc.grade_point;
+    } else if (finalGrade && finalGrade !== 'In Progress' && finalGrade !== '—' && GRADE_POINTS[finalGrade] !== undefined) {
+      if (finalGP === null) {
+        finalGP = GRADE_POINTS[finalGrade];
+      }
+    } else if (finalGrade === 'In Progress' || finalGrade === '—') {
+      finalGrade = null;
+      finalGP = null;
     }
 
     await pool.query(`

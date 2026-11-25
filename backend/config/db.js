@@ -83,6 +83,11 @@ async function createTables() {
       // Index already exists
     }
 
+    // Ensure current_cgpa column in existing users table
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN current_cgpa DECIMAL(3,2) DEFAULT 0.00');
+    } catch (e) {}
+
     // Semesters table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS semesters (

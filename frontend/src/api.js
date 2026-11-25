@@ -140,6 +140,18 @@ function handleClientFallback(endpoint, options = {}) {
     };
   }
 
+  // Auth: Profile Update
+  if (endpoint.startsWith('/auth/profile') && (method === 'PUT' || method === 'POST')) {
+    const saved = localStorage.getItem('gradpath_fallback_user');
+    let user = saved ? JSON.parse(saved) : {};
+    user = { ...user, ...body };
+    localStorage.setItem('gradpath_fallback_user', JSON.stringify(user));
+    return {
+      message: 'Profile updated successfully.',
+      user
+    };
+  }
+
   // Auth: Me
   if (endpoint.startsWith('/auth/me')) {
     const saved = localStorage.getItem('gradpath_fallback_user');
@@ -153,6 +165,7 @@ function handleClientFallback(endpoint, options = {}) {
       university: 'University of Frontier Technology, Bangladesh (UFTB)',
       level_term: 'Level 2, Term 1',
       target_cgpa: 3.80,
+      current_cgpa: 3.85,
       completed_credits: 19.5
     };
     return { user };
@@ -190,13 +203,16 @@ function handleClientFallback(endpoint, options = {}) {
   if (endpoint.startsWith('/engine/cgpa')) {
     const saved = localStorage.getItem('gradpath_fallback_user');
     const user = saved ? JSON.parse(saved) : {};
+    const cgpa = user.current_cgpa !== undefined ? parseFloat(user.current_cgpa) : 3.85;
+    const completedCredits = user.completed_credits !== undefined ? parseFloat(user.completed_credits) : 19.5;
     return {
-      cgpa: 3.85,
-      total_credits: 19.5,
-      total_earned_credits: 19.5,
+      cgpa,
+      total_credits: 140.0,
+      completed_credits: completedCredits,
+      total_earned_credits: completedCredits,
       target_cgpa: user.target_cgpa || 3.80,
       student_id: user.student_id || '2404031',
-      academic_standing: 'First Class Honors (High Distinction)'
+      academic_standing: cgpa >= 3.75 ? 'First Class Honors (High Distinction)' : 'Good Standing'
     };
   }
 

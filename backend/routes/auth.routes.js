@@ -189,7 +189,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 // PUT /api/auth/profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { name, target_cgpa, level_term, department } = req.body;
+    const { name, target_cgpa, current_cgpa, completed_credits, level_term, department } = req.body;
     const pool = getPool();
 
     const updates = [];
@@ -199,9 +199,17 @@ router.put('/profile', authenticateToken, async (req, res) => {
       updates.push('name = ?');
       values.push(name.trim());
     }
-    if (target_cgpa !== undefined) {
+    if (target_cgpa !== undefined && target_cgpa !== null && target_cgpa !== '') {
       updates.push('target_cgpa = ?');
       values.push(parseFloat(target_cgpa));
+    }
+    if (current_cgpa !== undefined && current_cgpa !== null && current_cgpa !== '') {
+      updates.push('current_cgpa = ?');
+      values.push(parseFloat(current_cgpa));
+    }
+    if (completed_credits !== undefined && completed_credits !== null && completed_credits !== '') {
+      updates.push('completed_credits = ?');
+      values.push(parseFloat(completed_credits));
     }
     if (level_term) {
       updates.push('level_term = ?');
@@ -220,7 +228,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await pool.query(
-      'SELECT id, name, email, student_id, role, department, university, level_term, target_cgpa, completed_credits FROM users WHERE id = ?',
+      'SELECT id, name, email, student_id, role, department, university, level_term, target_cgpa, current_cgpa, completed_credits FROM users WHERE id = ?',
       [req.user.id]
     );
 

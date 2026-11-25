@@ -17,6 +17,7 @@ import {
   Layers,
   BarChart3,
   Edit2,
+  Edit3,
   TrendingUp,
   Sparkles
 } from 'lucide-react';
@@ -41,8 +42,15 @@ export default function Dashboard({
   const [isAddSemModal, setIsAddSemModal] = useState(false);
   const [isAddCourseModal, setIsAddCourseModal] = useState(false);
   const [isEditCourseModal, setIsEditCourseModal] = useState(false);
+  const [isEditCgpaModal, setIsEditCgpaModal] = useState(false);
   const [selectedSemId, setSelectedSemId] = useState(null);
   const [editingCourse, setEditingCourse] = useState(null);
+
+  // Manual CGPA / Baseline States
+  const [manualCgpa, setManualCgpa] = useState('');
+  const [manualCredits, setManualCredits] = useState('');
+  const [manualTarget, setManualTarget] = useState('');
+  const [cgpaSaving, setCgpaSaving] = useState(false);
 
   // Form states for Add Semester
   const [newSemName, setNewSemName] = useState('');
@@ -52,6 +60,8 @@ export default function Dashboard({
   const [cCode, setCCode] = useState('');
   const [cTitle, setCTitle] = useState('');
   const [cCredits, setCCredits] = useState('3.0');
+  const [cGrade, setCGrade] = useState('A+');
+  const [cGradePoint, setCGradePoint] = useState('4.00');
   const [cMarks, setCMarks] = useState('');
   const [cAttendanceHeld, setCAttendanceHeld] = useState('30');
   const [cAttendanceAttended, setCAttendanceAttended] = useState('26');
@@ -79,12 +89,18 @@ export default function Dashboard({
 
   const handleCreateCourse = async (e) => {
     e.preventDefault();
-    if (!selectedSemId || !cCode || !cTitle) return;
+    const semId = selectedSemId || (semesters.length > 0 ? semesters[0].id : null);
+    if (!semId || !cCode || !cTitle) {
+      alert(lang === 'bn' ? 'অনুগ্রহ করে সেমিস্টার, কোর্স কোড এবং কোর্স টাইটেল লিখুন।' : 'Semester, Course code and title are required.');
+      return;
+    }
     await onAddCourse({
-      semester_id: selectedSemId,
+      semester_id: semId,
       code: cCode,
       title: cTitle,
       credits: parseFloat(cCredits),
+      grade: cGrade !== 'In Progress' ? cGrade : null,
+      grade_point: cGradePoint !== '' && cGrade !== 'In Progress' ? parseFloat(cGradePoint) : null,
       marks: cMarks !== '' ? parseFloat(cMarks) : null,
       attendance_held: parseInt(cAttendanceHeld, 10),
       attendance_attended: parseInt(cAttendanceAttended, 10),
@@ -93,7 +109,27 @@ export default function Dashboard({
     setCCode('');
     setCTitle('');
     setCMarks('');
+    setCGrade('A+');
+    setCGradePoint('4.00');
     setIsAddCourseModal(false);
+  };
+
+  const handleSaveManualCgpa = async (e) => {
+    e.preventDefault();
+    try {
+      setCgpaSaving(true);
+      await api.updateProfile({
+        current_cgpa: manualCgpa !== '' ? parseFloat(manualCgpa) : 0.00,
+        completed_credits: manualCredits !== '' ? parseFloat(manualCredits) : 0.00,
+        target_cgpa: manualTarget !== '' ? parseFloat(manualTarget) : 3.80
+      });
+      setIsEditCgpaModal(false);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      alert('Error updating CGPA: ' + err.message);
+    } finally {
+      setCgpaSaving(false);
+    }
   };
 
   const openEditCourse = (course) => {
@@ -102,6 +138,8 @@ export default function Dashboard({
     setCTitle(course.title);
     setCCredits(course.credits.toString());
     setCMarks(course.marks !== null ? course.marks.toString() : '');
+    setCGrade(course.grade || 'In Progress');
+    setCGradePoint(course.grade_point !== null ? course.grade_point.toString() : '');
     setCAttendanceHeld(course.attendance_held.toString());
     setCAttendanceAttended(course.attendance_attended.toString());
     setCDifficulty(course.difficulty.toString());
@@ -116,6 +154,8 @@ export default function Dashboard({
         code: cCode,
         title: cTitle,
         credits: parseFloat(cCredits),
+        grade: cGrade !== 'In Progress' ? cGrade : null,
+        grade_point: cGradePoint !== '' && cGrade !== 'In Progress' ? parseFloat(cGradePoint) : null,
         marks: cMarks !== '' ? parseFloat(cMarks) : null,
         attendance_held: parseInt(cAttendanceHeld, 10),
         attendance_attended: parseInt(cAttendanceAttended, 10),
@@ -271,8 +311,21 @@ export default function Dashboard({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => {
+              if (semesters.length > 0 && !selectedSemId) {
+                setSelectedSemId(semesters[0].id);
+              }
+              setIsAddCourseModal(true);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{lang === 'bn' ? '+ নতুন কোর্স যোগ করুন' : '+ Add Course'}</span>
+          </button>
+
+          <button
             onClick={() => setIsAddSemModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
           >
             <Plus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>{t.addSemester}</span>
@@ -280,9 +333,9 @@ export default function Dashboard({
 
           <button
             onClick={exportPDF}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-600/20 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
           >
-            <FileDown className="w-4 h-4" />
+            <FileDown className="w-4 h-4 text-slate-400" />
             <span>{t.exportPdf}</span>
           </button>
         </div>
@@ -295,9 +348,19 @@ export default function Dashboard({
         <div className="glass-card-hover rounded-3xl p-5 relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.currentCgpa}</span>
-            <div className="p-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-              <Trophy className="w-5 h-5" />
-            </div>
+            <button
+              onClick={() => {
+                setManualCgpa(currentCgpa > 0 ? currentCgpa.toString() : '');
+                setManualCredits(cgpaData?.completed_credits ? cgpaData.completed_credits.toString() : '');
+                setManualTarget(targetCgpa.toString());
+                setIsEditCgpaModal(true);
+              }}
+              className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors flex items-center gap-1 text-[11px] font-bold border border-emerald-200/50 dark:border-emerald-800/50"
+              title={lang === 'bn' ? 'CGPA ও ক্রেডিট সরাসরি সেট করুন' : 'Directly set Current CGPA & Credits'}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'CGPA সেট করুন' : 'Edit / Set CGPA'}</span>
+            </button>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
@@ -345,9 +408,19 @@ export default function Dashboard({
         <div className="glass-card-hover rounded-3xl p-5 relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{t.creditsCompleted}</span>
-            <div className="p-2 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-              <GraduationCap className="w-5 h-5" />
-            </div>
+            <button
+              onClick={() => {
+                setManualCgpa(currentCgpa > 0 ? currentCgpa.toString() : '');
+                setManualCredits(cgpaData?.completed_credits ? cgpaData.completed_credits.toString() : '');
+                setManualTarget(targetCgpa.toString());
+                setIsEditCgpaModal(true);
+              }}
+              className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-1 text-[11px] font-bold border border-indigo-200/50 dark:border-indigo-800/50"
+              title={lang === 'bn' ? 'ক্রেডিট সেট করুন' : 'Set Completed Credits'}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'ক্রেডিট সেট' : 'Set Credits'}</span>
+            </button>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
@@ -359,7 +432,7 @@ export default function Dashboard({
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
             <div 
               className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500" 
-              style={{ width: `${Math.min(cgpaData?.completion_percentage || 0, 100)}%` }}
+              style={{ width: `${Math.min(cgpaData?.completion_percentage || ((cgpaData?.completed_credits || 0) / 140.0) * 100, 100)}%` }}
             />
           </div>
         </div>
@@ -556,16 +629,22 @@ export default function Dashboard({
                 {isExpanded && (
                   <div className="border-t border-slate-200/80 dark:border-slate-800 overflow-x-auto">
                     {sem.courses.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-400">
-                        {lang === 'bn' ? 'এই সেমিস্টারে কোনো কোর্স নেই।' : 'No courses in this semester yet.'}
+                      <div className="p-6 text-center space-y-2.5">
+                        <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
+                          <BookOpen className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                          {lang === 'bn' ? `"${sem.name}" সেমিস্টারে এখনো কোনো কোর্স যোগ করা হয়নি।` : `No courses added to "${sem.name}" yet.`}
+                        </p>
                         <button
                           onClick={() => {
                             setSelectedSemId(sem.id);
                             setIsAddCourseModal(true);
                           }}
-                          className="ml-2 font-bold text-emerald-600 underline"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/20 transition-all"
                         >
-                          + {t.addCourse}
+                          <Plus className="w-4 h-4" />
+                          <span>{lang === 'bn' ? `+ ${sem.name}-এ কোর্স যোগ করুন` : `+ Add Course to ${sem.name}`}</span>
                         </button>
                       </div>
                     ) : (
@@ -722,57 +801,177 @@ export default function Dashboard({
       {isAddCourseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="glass-card rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              {t.addCourse}
-            </h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    {lang === 'bn' ? 'নতুন কোর্স যুক্ত করুন' : t.addCourse}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {lang === 'bn' ? 'কোর্স কোড, ক্রেডিট ও প্রাপ্ত গ্রেড লিখুন' : 'Enter course code, credits and recorded grade'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddCourseModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
             <form onSubmit={handleCreateCourse} className="space-y-3">
+              {/* Semester Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'bn' ? 'সেমিস্টার (Select Semester)' : 'Semester'}
+                </label>
+                <select
+                  required
+                  value={selectedSemId || (semesters[0]?.id || '')}
+                  onChange={(e) => setSelectedSemId(parseInt(e.target.value, 10))}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                >
+                  {semesters.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (Term #{s.term_order})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quick Suggestions */}
+              <div>
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
+                  {lang === 'bn' ? 'দ্রুত পরামর্শ (Quick Templates):' : 'Quick Templates:'}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { code: 'PROG211', title: 'Android & Web App Development', cr: '3.0' },
+                    { code: 'CSE201', title: 'Database Management Systems', cr: '3.0' },
+                    { code: 'CSE203', title: 'Operating Systems & Security', cr: '3.0' },
+                    { code: 'MATH217', title: 'Advanced Engineering Math', cr: '3.0' },
+                    { code: 'SEC203', title: 'Threat Modelling & Monitoring', cr: '3.0' },
+                    { code: 'CSE111', title: 'Structured Programming Language', cr: '3.0' }
+                  ].map((sug, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setCCode(sug.code);
+                        setCTitle(sug.title);
+                        setCCredits(sug.cr);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 hover:text-emerald-600 text-[10px] font-semibold text-slate-600 dark:text-slate-300 transition-colors"
+                    >
+                      + {sug.code}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1">
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Course Code
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="CSE211"
+                    placeholder="e.g. CSE201"
                     value={cCode}
                     onChange={(e) => setCCode(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Course Title
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Data Structures"
+                    placeholder="e.g. Database Management Systems"
                     value={cTitle}
                     onChange={(e) => setCTitle(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Credits (e.g. 3.0, 1.5)
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Credits (ক্রেডিট)
                   </label>
                   <input
                     type="number"
                     step="0.5"
+                    min="0.5"
+                    max="6.0"
                     required
                     value={cCredits}
                     onChange={(e) => setCCredits(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Marks (Leave empty if in progress)
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    {lang === 'bn' ? 'গ্রেড (Letter Grade)' : 'Grade / Status'}
+                  </label>
+                  <select
+                    value={cGrade}
+                    onChange={(e) => {
+                      const g = e.target.value;
+                      setCGrade(g);
+                      const gpMap = { 'A+': 4.00, 'A': 3.75, 'A-': 3.50, 'B+': 3.25, 'B': 3.00, 'B-': 2.75, 'C+': 2.50, 'C': 2.25, 'D': 2.00, 'F': 0.00 };
+                      if (gpMap[g] !== undefined) {
+                        setCGradePoint(gpMap[g].toFixed(2));
+                      } else {
+                        setCGradePoint('');
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                  >
+                    <option value="A+">A+ (4.00) — 80%+</option>
+                    <option value="A">A (3.75) — 75-79%</option>
+                    <option value="A-">A- (3.50) — 70-74%</option>
+                    <option value="B+">B+ (3.25) — 65-69%</option>
+                    <option value="B">B (3.00) — 60-64%</option>
+                    <option value="B-">B- (2.75) — 55-59%</option>
+                    <option value="C+">C+ (2.50) — 50-54%</option>
+                    <option value="C">C (2.25) — 45-49%</option>
+                    <option value="D">D (2.00) — 40-44%</option>
+                    <option value="F">F (0.00) — Fail</option>
+                    <option value="In Progress">In Progress (চলমান)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Grade Point (GP)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.00"
+                    max="4.00"
+                    placeholder="e.g. 4.00"
+                    value={cGradePoint}
+                    onChange={(e) => setCGradePoint(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    {lang === 'bn' ? 'নম্বর (ঐচ্ছিক)' : 'Marks (Optional)'}
                   </label>
                   <input
                     type="number"
@@ -781,7 +980,23 @@ export default function Dashboard({
                     max="100"
                     placeholder="e.g. 82"
                     value={cMarks}
-                    onChange={(e) => setCMarks(e.target.value)}
+                    onChange={(e) => {
+                      const m = e.target.value;
+                      setCMarks(m);
+                      if (m !== '') {
+                        const num = parseFloat(m);
+                        if (num >= 80) { setCGrade('A+'); setCGradePoint('4.00'); }
+                        else if (num >= 75) { setCGrade('A'); setCGradePoint('3.75'); }
+                        else if (num >= 70) { setCGrade('A-'); setCGradePoint('3.50'); }
+                        else if (num >= 65) { setCGrade('B+'); setCGradePoint('3.25'); }
+                        else if (num >= 60) { setCGrade('B'); setCGradePoint('3.00'); }
+                        else if (num >= 55) { setCGrade('B-'); setCGradePoint('2.75'); }
+                        else if (num >= 50) { setCGrade('C+'); setCGradePoint('2.50'); }
+                        else if (num >= 45) { setCGrade('C'); setCGradePoint('2.25'); }
+                        else if (num >= 40) { setCGrade('D'); setCGradePoint('2.00'); }
+                        else { setCGrade('F'); setCGradePoint('0.00'); }
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -789,7 +1004,7 @@ export default function Dashboard({
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Held Classes
                   </label>
                   <input
@@ -801,7 +1016,7 @@ export default function Dashboard({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Attended
                   </label>
                   <input
@@ -813,7 +1028,7 @@ export default function Dashboard({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Difficulty (1-5)
                   </label>
                   <input
@@ -827,19 +1042,19 @@ export default function Dashboard({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsAddCourseModal(false)}
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  Cancel
+                  {lang === 'bn' ? 'বাতিল' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700"
+                  className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm"
                 >
-                  Add Course
+                  {lang === 'bn' ? 'কোর্স যুক্ত করুন' : 'Add Course'}
                 </button>
               </div>
             </form>
@@ -865,7 +1080,7 @@ export default function Dashboard({
                     required
                     value={cCode}
                     onChange={(e) => setCCode(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   />
                 </div>
                 <div className="col-span-2">
@@ -877,7 +1092,7 @@ export default function Dashboard({
                     required
                     value={cTitle}
                     onChange={(e) => setCTitle(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
                   />
                 </div>
               </div>
@@ -893,7 +1108,53 @@ export default function Dashboard({
                     required
                     value={cCredits}
                     onChange={(e) => setCCredits(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Grade
+                  </label>
+                  <select
+                    value={cGrade}
+                    onChange={(e) => {
+                      const g = e.target.value;
+                      setCGrade(g);
+                      const gpMap = { 'A+': 4.00, 'A': 3.75, 'A-': 3.50, 'B+': 3.25, 'B': 3.00, 'B-': 2.75, 'C+': 2.50, 'C': 2.25, 'D': 2.00, 'F': 0.00 };
+                      if (gpMap[g] !== undefined) setCGradePoint(gpMap[g].toFixed(2));
+                      else setCGradePoint('');
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                  >
+                    <option value="A+">A+ (4.00)</option>
+                    <option value="A">A (3.75)</option>
+                    <option value="A-">A- (3.50)</option>
+                    <option value="B+">B+ (3.25)</option>
+                    <option value="B">B (3.00)</option>
+                    <option value="B-">B- (2.75)</option>
+                    <option value="C+">C+ (2.50)</option>
+                    <option value="C">C (2.25)</option>
+                    <option value="D">D (2.00)</option>
+                    <option value="F">F (0.00)</option>
+                    <option value="In Progress">In Progress</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Grade Point (GP)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.00"
+                    max="4.00"
+                    value={cGradePoint}
+                    onChange={(e) => setCGradePoint(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   />
                 </div>
 
@@ -939,7 +1200,7 @@ export default function Dashboard({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsEditCourseModal(false)}
@@ -952,6 +1213,113 @@ export default function Dashboard({
                   className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700"
                 >
                   Update Course
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Set / Upload Current CGPA Modal */}
+      {isEditCgpaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="glass-card rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    {lang === 'bn' ? 'বর্তমান CGPA ও ক্রেডিট সেট করুন' : 'Set Current CGPA & Credits'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {lang === 'bn' ? 'সরাসরি আপনার বর্তমান CGPA ও ক্রেডিট আপলোড করুন' : 'Directly enter your current baseline academic standing'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditCgpaModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveManualCgpa} className="space-y-3.5">
+              <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
+                <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                  {lang === 'bn'
+                    ? '💡 আপনি যদি ২য় বা ৩য় বর্ষের শিক্ষার্থী হন, তবে অতীতের সব কোর্স যোগ না করেই সরাসরি আপনার বর্তমান CGPA এবং সম্পন্নকৃত ক্রেডিট এখানে লিখে দিতে পারেন।'
+                    : '💡 If you are already in an advanced semester, you can directly input your current CGPA and completed credits without entering all past individual courses.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'bn' ? 'বর্তমান CGPA (Current CGPA)' : 'Current CGPA'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.00"
+                  max="4.00"
+                  required
+                  placeholder="e.g. 3.65"
+                  value={manualCgpa}
+                  onChange={(e) => setManualCgpa(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-extrabold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'bn' ? 'সম্পন্নকৃত মোট ক্রেডিট (Credits Completed)' : 'Completed Credits'}
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.0"
+                  max="160.0"
+                  required
+                  placeholder="e.g. 26.0"
+                  value={manualCredits}
+                  onChange={(e) => setManualCredits(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-extrabold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'bn' ? 'লক্ষ্যমাত্রা CGPA (Target Graduation CGPA)' : 'Target Graduation CGPA'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="2.00"
+                  max="4.00"
+                  required
+                  placeholder="e.g. 3.80"
+                  value={manualTarget}
+                  onChange={(e) => setManualTarget(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-extrabold"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditCgpaModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={cgpaSaving}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/20 disabled:opacity-50"
+                >
+                  {cgpaSaving ? 'Saving...' : (lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save & Apply')}
                 </button>
               </div>
             </form>

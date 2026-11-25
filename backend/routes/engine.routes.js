@@ -10,8 +10,10 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     // Fetch user profile
-    const [userRows] = await pool.query('SELECT target_cgpa FROM users WHERE id = ?', [userId]);
-    const targetCgpa = userRows.length > 0 ? parseFloat(userRows[0].target_cgpa) : 3.80;
+    const [userRows] = await pool.query('SELECT target_cgpa, current_cgpa, completed_credits FROM users WHERE id = ?', [userId]);
+    const targetCgpa = userRows.length > 0 && userRows[0].target_cgpa ? parseFloat(userRows[0].target_cgpa) : 3.80;
+    const manualCgpa = userRows.length > 0 && userRows[0].current_cgpa ? parseFloat(userRows[0].current_cgpa) : 0.00;
+    const manualCredits = userRows.length > 0 && userRows[0].completed_credits ? parseFloat(userRows[0].completed_credits) : 0.00;
 
     // Fetch all semesters
     const [semesters] = await pool.query(
@@ -59,7 +61,23 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
       };
     });
 
-    const cgpa = completedCredits > 0 ? parseFloat((totalPoints / completedCredits).toFixed(2)) : 0.00;
+    let cgpa = 0.00;
+    let finalCompletedCredits = 0.00;
+
+    if (completedCredits > 0 && manualCredits > 0 && manualCgpa > 0) {
+      // Both exist: combine baseline credits/CGPA + recorded semester courses
+      const combinedPoints = (manualCgpa * manualCredits) + totalPoints;
+      finalCompletedCredits = manualCredits + completedCredits;
+      cgpa = parseFloat((combinedPoints / finalCompletedCredits).toFixed(2));
+    } else if (completedCredits > 0) {
+      // Calculated purely from recorded courses
+      cgpa = parseFloat((totalPoints / completedCredits).toFixed(2));
+      finalCompletedCredits = completedCredits;
+    } else if (manualCgpa > 0) {
+      // Baseline / manually uploaded CGPA & credits
+      cgpa = manualCgpa;
+      finalCompletedCredits = manualCredits;
+    }
 
     // Academic Standing classification
     let standing = 'Good Standing';
@@ -73,20 +91,22 @@ router.get('/cgpa', authenticateToken, async (req, res) => {
     } else if (cgpa >= 2.50) {
       standing = 'Satisfactory';
       standingColor = 'amber';
-    } else if (completedCredits > 0) {
+    } else if (finalCompletedCredits > 0) {
       standing = 'Academic Warning (Probation Risk)';
       standingColor = 'rose';
     }
 
-    // Update completed_credits on user record
-    await pool.query('UPDATE users SET completed_credits = ? WHERE id = ?', [completedCredits, userId]);
+    // Update completed_credits on user record if courses were computed
+    if (completedCredits > 0) {
+      await pool.query('UPDATE users SET current_cgpa = ?, completed_credits = ? WHERE id = ?', [cgpa, finalCompletedCredits, userId]);
+    }
 
     return res.json({
       cgpa,
       target_cgpa: targetCgpa,
-      completed_credits: completedCredits,
-      attempted_credits: attemptedCredits,
-      passed_credits: passedCredits,
+      completed_credits: finalCompletedCredits,
+      attempted_credits: attemptedCredits + (finalCompletedCredits > completedCredits ? manualCredits : 0),
+      passed_credits: passedCredits + (finalCompletedCredits > completedCredits ? manualCredits : 0),
       total_degree_credits: 140.0,
       completion_percentage: parseFloat(((completedCredits / 140.0) * 100).toFixed(1)),
       standing,
