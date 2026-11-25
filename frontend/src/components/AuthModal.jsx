@@ -14,6 +14,85 @@ import {
 import UftbLogo from './UftbLogo';
 import { api } from '../api';
 
+const BANGLADESH_UNIVERSITIES = [
+  // Engineering Universities
+  'Bangladesh University of Engineering and Technology (BUET)',
+  'Dhaka University of Engineering & Technology (DUET)',
+  'Rajshahi University of Engineering & Technology (RUET)',
+  'Chittagong University of Engineering & Technology (CUET)',
+  'Khulna University of Engineering & Technology (KUET)',
+  'Bangladesh University of Textiles (BUTEX)',
+  'Military Institute of Science and Technology (MIST)',
+  'Islamic University of Technology (IUT)',
+
+  // General Public Universities
+  'University of Dhaka (DU)',
+  'Jahangirnagar University (JU)',
+  'University of Rajshahi (RU)',
+  'University of Chittagong (CU)',
+  'Jagannath University (JnU)',
+  'Khulna University (KU)',
+  'Comilla University (CoU)',
+  'Islamic University, Bangladesh (IU)',
+  'Jatiya Kabi Kazi Nazrul Islam University (JKKNIU)',
+  'Begum Rokeya University, Rangpur (BRUR)',
+  'University of Barishal (BU)',
+  'Rabindra University, Bangladesh (RUB)',
+  'Sheikh Hasina University (SHU)',
+
+  // Science & Technology Universities
+  'Shahjalal University of Science and Technology (SUST)',
+  'Mawlana Bhashani Science and Technology University (MBSTU)',
+  'Patuakhali Science and Technology University (PSTU)',
+  'Noakhali Science and Technology University (NSTU)',
+  'Hajee Mohammad Danesh Science and Technology University (HSTU)',
+  'Jashore University of Science and Technology (JUST)',
+  'Pabna University of Science and Technology (PUST)',
+  'Bangabandhu Sheikh Mujibur Rahman Science and Technology University (BSMRSTU)',
+  'Rangamati Science and Technology University (RMSTU)',
+  'Bangamata Sheikh Fojilatunnesa Mujib Science and Technology University (BSFMSTU)',
+  'Chandpur Science and Technology University (CSTU)',
+
+  // Specialized / Frontier Tech Universities
+  'University of Frontier Technology, Bangladesh (UFTB)',
+  'Bangabandhu Sheikh Mujibur Rahman Digital University (BDU)',
+  'Bangabandhu Sheikh Mujibur Rahman Maritime University (BSMRMU)',
+  'Bangabandhu Sheikh Mujibur Rahman Aviation and Aerospace University (BSMRAAU)',
+
+  // Agricultural Universities
+  'Bangladesh Agricultural University (BAU)',
+  'Sher-e-Bangla Agricultural University (SAU)',
+  'Bangabandhu Sheikh Mujibur Rahman Agricultural University (BSMRAU)',
+  'Sylhet Agricultural University (SAU)',
+  'Khulna Agricultural University (KAU)',
+  'Chittagong Veterinary and Animal Sciences University (CVASU)',
+
+  // Top Private Universities
+  'North South University (NSU)',
+  'BRAC University (BRACU)',
+  'Independent University, Bangladesh (IUB)',
+  'Ahsanullah University of Science and Technology (AUST)',
+  'United International University (UIU)',
+  'American International University-Bangladesh (AIUB)',
+  'East West University (EWU)',
+  'Daffodil International University (DIU)',
+  'University of Liberal Arts Bangladesh (ULAB)',
+  'Southeast University (SEU)',
+  'Green University of Bangladesh (GUB)',
+  'University of Asia Pacific (UAP)',
+  'International Islamic University Chittagong (IIUC)',
+  'Stamford University Bangladesh',
+  'Primeasia University',
+  'Northern University Bangladesh',
+  'Eastern University',
+  'City University, Bangladesh',
+  'Canadian University of Bangladesh (CUB)',
+  'Dhaka International University (DIU)',
+  'Asian University for Women (AUW)',
+  'National University, Bangladesh (NU)',
+  'Bangladesh Open University (BOU)'
+];
+
 export default function AuthModal({ onLoginSuccess, t, lang }) {
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'forgot'
   const [loading, setLoading] = useState(false);
@@ -25,8 +104,7 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [studentId, setStudentId] = useState('');
-  const [university, setUniversity] = useState('University of Frontier Technology, Bangladesh (UFTB)');
-  const [customUniversity, setCustomUniversity] = useState('');
+  const [university, setUniversity] = useState('');
   const [department, setDepartment] = useState('Cyber Security Engineering');
   const [levelTerm, setLevelTerm] = useState('Level 2, Term 1');
   const [targetCgpa, setTargetCgpa] = useState('3.80');
@@ -49,7 +127,7 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
 
     try {
       if (authMode === 'register') {
-        const finalUniversity = university === 'Other' ? (customUniversity.trim() || 'Custom University') : university;
+        const finalUniversity = university.trim() || 'General University';
         const res = await api.register({
           name,
           email,
@@ -385,38 +463,38 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
                     </div>
                   </div>
 
-                  {/* University Selection */}
+                  {/* University Selection with Intelligent Autocomplete & Custom Type */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      {lang === 'bn' ? 'বিশ্ববিদ্যালয় (Select University)' : 'University / Institution'}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {lang === 'bn' ? 'বিশ্ববিদ্যালয় (Select or Type University)' : 'University / Institution'}
+                      </label>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        {lang === 'bn' ? 'টাইপ বা সার্চ করুন' : 'Search or type custom'}
+                      </span>
+                    </div>
                     <div className="relative">
                       <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                      <select
-                        value={university}
-                        onChange={(e) => setUniversity(e.target.value)}
-                        className="w-full pl-10 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                      >
-                        <option value="University of Frontier Technology, Bangladesh (UFTB)">University of Frontier Technology, Bangladesh (UFTB)</option>
-                        <option value="Bangladesh University of Engineering and Technology (BUET)">Bangladesh University of Engineering and Technology (BUET)</option>
-                        <option value="University of Dhaka (DU)">University of Dhaka (DU)</option>
-                        <option value="Rajshahi University of Engineering & Technology (RUET)">Rajshahi University of Engineering & Technology (RUET)</option>
-                        <option value="Chittagong University of Engineering & Technology (CUET)">Chittagong University of Engineering & Technology (CUET)</option>
-                        <option value="Khulna University of Engineering & Technology (KUET)">Khulna University of Engineering & Technology (KUET)</option>
-                        <option value="Shahjalal University of Science and Technology (SUST)">Shahjalal University of Science and Technology (SUST)</option>
-                        <option value="Other">Other University / অন্যান্য বিশ্ববিদ্যালয়</option>
-                      </select>
-                    </div>
-                    {university === 'Other' && (
                       <input
                         type="text"
+                        list="bangladesh-universities-list"
                         required
-                        value={customUniversity}
-                        onChange={(e) => setCustomUniversity(e.target.value)}
-                        placeholder="Type your university name..."
-                        className="w-full mt-2 px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={university}
+                        onChange={(e) => setUniversity(e.target.value)}
+                        placeholder={lang === 'bn' ? 'বিশ্ববিদ্যালয়ের নাম খুঁজুন বা লিখুন (e.g. BUET, DU, RUET, NSU...)' : 'Type or select university (e.g. BUET, DU, RUET, NSU...)'}
+                        className="w-full pl-10 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium placeholder:text-slate-400"
                       />
-                    )}
+                      <datalist id="bangladesh-universities-list">
+                        {BANGLADESH_UNIVERSITIES.map((uni, idx) => (
+                          <option key={idx} value={uni} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                      {lang === 'bn' 
+                        ? '💡 যেকোনো বিশ্ববিদ্যালয়ের নাম টাইপ করলে তালিকায় সাজেস্ট করবে, অথবা সরাসরি যেকোনো বিশ্ববিদ্যালয়ের নাম লিখে দিতে পারবেন।' 
+                        : '💡 Suggestions appear as you type, or you can freely type your custom university name.'}
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -539,7 +617,7 @@ export default function AuthModal({ onLoginSuccess, t, lang }) {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={authMode === 'register' ? (university.includes('UFTB') ? '2404031@uftb.ac.bd' : 'student@university.edu') : '2404031 or student@gmail.com'}
+                    placeholder={authMode === 'register' ? (university && university.toLowerCase().includes('uftb') ? '2404031@uftb.ac.bd' : 'student@university.edu') : '2404031 or student@gmail.com'}
                     className="w-full pl-10 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
